@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0;font-size:14px}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Pacebot</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: one centered workbench column. Time on top, the robot's floor in the middle, controls below. */
+:root {
+  --bg: #e9eef2;
+  --panel: #f7f9fb;
+  --ink: #18242f;
+  --muted: #5b6b78;
+  --line: #c9d3dc;
+  --focus: #e0662a;
+  --rest: #17907f;
+  --bot: #b9c6d1;
+  --bot-shade: #8fa0ae;
+  --bot-dark: #24323d;
+  --floor: #d6dfe6;
+  --font-display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  --mode: var(--focus);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121a21; --panel: #1a252e; --ink: #e6edf2; --muted: #93a3b0; --line: #2c3a46;
+    --focus: #f07a3e; --rest: #2db8a4; --bot: #a9b8c4; --bot-shade: #7b8d9b; --bot-dark: #0e151b; --floor: #22303b;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121a21; --panel: #1a252e; --ink: #e6edf2; --muted: #93a3b0; --line: #2c3a46;
+  --focus: #f07a3e; --rest: #2db8a4; --bot: #a9b8c4; --bot-shade: #7b8d9b; --bot-dark: #0e151b; --floor: #22303b;
+}
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 40px;
+}
+.app.is-break { --mode: var(--rest); }
+.app { max-width: 720px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 1.5rem; margin: 0; letter-spacing: .02em; }
+.tabs { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px; }
+.tabs button { border: 0; background: transparent; color: var(--muted); font: 500 .85rem var(--font-body); padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+.tabs button[aria-pressed="true"] { background: var(--mode); color: #fff; }
+
+.readout { display: grid; justify-items: center; gap: 4px; }
+.label { text-transform: uppercase; letter-spacing: .14em; font-size: .78rem; font-weight: 600; color: var(--mode); }
+.time { font-family: var(--font-display); font-weight: 700; font-size: clamp(4rem, 17vw, 7.5rem); line-height: 1; font-variant-numeric: tabular-nums; }
+.rounds { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .85rem; }
+.dots { display: flex; gap: 6px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--line); }
+.dot.done { background: var(--focus); border-color: var(--focus); }
+.dot.now { border-color: var(--focus); }
+
+.stage { position: relative; height: 230px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.floor { position: absolute; left: 0; right: 0; bottom: 0; height: 36px; background: var(--floor); border-top: 2px solid var(--line); }
+.floor::after { content: ""; position: absolute; inset: 14px 0 auto; height: 3px; background: repeating-linear-gradient(90deg, var(--line) 0 18px, transparent 18px 36px); }
+.progress { position: absolute; left: 0; bottom: 0; height: 5px; background: var(--mode); width: 0%; transition: width .3s linear; }
+.bubble { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); font: 600 .85rem var(--font-body); color: var(--muted); white-space: nowrap; }
+
+.walker { position: absolute; bottom: 30px; left: calc(50% - 60px); width: 120px; height: 160px; }
+.facing, .bot { width: 100%; height: 100%; }
+.shadow { position: absolute; bottom: -4px; left: 30px; width: 60px; height: 10px; border-radius: 50%; background: var(--ink); opacity: .12; }
+svg { display: block; overflow: visible; }
+.b-body { fill: var(--bot); }
+.b-shade { fill: var(--bot-shade); }
+.b-dark { fill: var(--bot-dark); }
+.b-mode { fill: var(--mode); }
+.b-line { stroke: var(--bot-dark); stroke-width: 3; stroke-linecap: round; fill: none; }
+.arm-l, .arm-r, .leg-l, .leg-r, .eyes { transform-box: view-box; }
+.arm-l { transform-origin: 36px 80px; }
+.arm-r { transform-origin: 84px 80px; }
+.leg-l { transform-origin: 50px 120px; }
+.leg-r { transform-origin: 70px 120px; }
+.happy { display: none; }
+.lamp { animation: blink 1.4s steps(1) infinite; }
+
+/* Focus style: pace back and forth */
+.app.fx-pace:not(.is-break) .walker { animation: pace 10s linear -2.5s infinite; }
+.app.fx-pace:not(.is-break) .facing { animation: face 10s linear -2.5s infinite; }
+.app.fx-pace:not(.is-break) .bot { animation: bob .5s ease-in-out infinite; }
+.app.fx-pace:not(.is-break) .eyes { transform: translateX(4px); }
+.app.fx-pace:not(.is-break) .leg-l, .app.fx-pace:not(.is-break) .arm-r { animation: swing 1s ease-in-out infinite; }
+.app.fx-pace:not(.is-break) .leg-r, .app.fx-pace:not(.is-break) .arm-l { animation: swing 1s ease-in-out -.5s infinite; }
+
+/* Focus style: type at a desk */
+.desk { position: absolute; left: -10px; bottom: -6px; width: 140px; height: 62px; display: none; }
+.app.fx-type:not(.is-break) .desk { display: block; }
+.app.fx-type:not(.is-break) .eyes { transform: translateY(3px); }
+.app.fx-type:not(.is-break) .arm-l { animation: type-l .32s ease-in-out infinite; }
+.app.fx-type:not(.is-break) .arm-r { animation: type-r .32s ease-in-out -.16s infinite; }
+.app.fx-type:not(.is-break) .bot { animation: breathe 4s ease-in-out infinite; transform-origin: 50% 100%; }
+.desk-top { fill: var(--bot-dark); }
+.desk-key { fill: var(--bot-shade); }
+
+/* Focus style: stand and breathe */
+.open { transform-box: view-box; transform-origin: 60px 43px; }
+.app.fx-breathe:not(.is-break) .bot { animation: breathe 4s ease-in-out infinite; transform-origin: 50% 100%; }
+.app.fx-breathe:not(.is-break) .open,
+.app.fx-type:not(.is-break) .open { animation: eye-blink 5s ease-in-out infinite; }
+
+/* Focus style: still */
+.app.fx-still:not(.is-break) .lamp { animation: none; }
+
+/* Break: jump up and down */
+.app.is-break .walker { transition: left .6s ease; }
+.app.is-break .bot { animation: jump .9s cubic-bezier(.3,0,.4,1) infinite; transform-origin: 50% 100%; }
+.app.is-break .shadow { animation: shrink .9s cubic-bezier(.3,0,.4,1) infinite; }
+.app.is-break .arm-l { animation: cheer-l .9s ease-in-out infinite; }
+.app.is-break .arm-r { animation: cheer-r .9s ease-in-out infinite; }
+.app.is-break .happy { display: inline; }
+.app.is-break .open { display: none; }
+
+.app.paused .walker, .app.paused .facing, .app.paused .bot, .app.paused .shadow,
+.app.paused .arm-l, .app.paused .arm-r, .app.paused .leg-l, .app.paused .leg-r { animation-play-state: paused; }
+
+@keyframes type-l { 0%, 100% { transform: rotate(-22deg); } 50% { transform: rotate(-30deg) translateY(-3px); } }
+@keyframes type-r { 0%, 100% { transform: rotate(22deg); } 50% { transform: rotate(30deg) translateY(-3px); } }
+@keyframes breathe { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.015, 1.03); } }
+@keyframes eye-blink { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(.1); } }
+
+.style-row { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .85rem; color: var(--muted); }
+.style-row .tabs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+@keyframes pace { 0% { left: 0; } 50% { left: calc(100% - 120px); } 100% { left: 0; } }
+@keyframes face { 0%, 49.99% { transform: scaleX(1); } 50%, 100% { transform: scaleX(-1); } }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes swing { 0%, 100% { transform: rotate(22deg); } 50% { transform: rotate(-22deg); } }
+@keyframes jump {
+  0%, 100% { transform: translateY(0) scale(1.06, .9); }
+  15% { transform: translateY(0) scale(1, 1); }
+  50% { transform: translateY(-70px) scale(.97, 1.04); }
+  85% { transform: translateY(0) scale(1, 1); }
+}
+@keyframes shrink { 0%, 100% { transform: scale(1); opacity: .14; } 50% { transform: scale(.55); opacity: .06; } }
+@keyframes cheer-l { 0%, 100% { transform: rotate(100deg); } 50% { transform: rotate(160deg); } }
+@keyframes cheer-r { 0%, 100% { transform: rotate(-100deg); } 50% { transform: rotate(-160deg); } }
+@keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: .25; } }
+
+.controls { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.btn { font: 600 1rem var(--font-body); border-radius: 12px; padding: 12px 22px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+.btn.primary { background: var(--mode); border-color: var(--mode); color: #fff; min-width: 140px; }
+.btn:hover { filter: brightness(1.05); }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid var(--mode); outline-offset: 2px; }
+
+details { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 14px; }
+.field { display: grid; gap: 4px; font-size: .85rem; color: var(--muted); }
+.field input[type="number"] { font: 500 1rem var(--font-body); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; }
+.check { display: flex; gap: 8px; align-items: center; font-size: .9rem; margin-top: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .walker, .facing, .bot, .shadow, .arm-l, .arm-r, .leg-l, .leg-r, .lamp { animation-duration: 0s !important; animation-iteration-count: 1 !important; }
+  .app:not(.is-break) .walker { left: calc(50% - 60px); }
+  .app.is-break .arm-l { transform: rotate(150deg); }
+  .app.is-break .arm-r { transform: rotate(-150deg); }
+}
+</style>
+
+</head>
+<body>
+<main class="app paused" id="app">
+  <header>
+    <h1>Pacebot</h1>
+    <div class="tabs" role="group" aria-label="Session type">
+      <button id="tab-work" data-mode="work" aria-pressed="true">Focus</button>
+      <button id="tab-short" data-mode="short" aria-pressed="false">Short break</button>
+      <button id="tab-long" data-mode="long" aria-pressed="false">Long break</button>
+    </div>
+  </header>
+
+  <section class="readout" aria-live="polite">
+    <div class="label" id="label">Focus</div>
+    <div class="time" id="time">25:00</div>
+    <div class="rounds"><span id="roundText">Round 1 of 4</span><span class="dots" id="dots"></span></div>
+  </section>
+
+  <section class="stage" aria-label="Robot">
+    <div class="bubble" id="bubble">Press Start and I'll get to work</div>
+    <div class="floor"><div class="progress" id="progress"></div></div>
+    <div class="walker" id="walker">
+      <div class="shadow"></div>
+      <div class="facing">
+        <div class="bot">
+          <svg viewBox="0 0 120 160" width="120" height="160" aria-hidden="true">
+            <line x1="60" y1="24" x2="60" y2="9" class="b-line"/>
+            <circle cx="60" cy="7" r="5" class="b-mode lamp"/>
+            <g class="leg-l"><rect x="43" y="116" width="14" height="30" rx="5" class="b-shade"/><rect x="39" y="142" width="22" height="9" rx="4" class="b-dark"/></g>
+            <g class="leg-r"><rect x="63" y="116" width="14" height="30" rx="5" class="b-shade"/><rect x="59" y="142" width="22" height="9" rx="4" class="b-dark"/></g>
+            <rect x="54" y="64" width="12" height="10" class="b-shade"/>
+            <rect x="34" y="72" width="52" height="48" rx="9" class="b-body"/>
+            <rect x="45" y="83" width="30" height="20" rx="4" class="b-dark"/>
+            <rect x="49" y="88" width="10" height="4" rx="2" class="b-mode"/>
+            <rect x="61" y="88" width="10" height="4" rx="2" class="b-mode" opacity=".5"/>
+            <rect x="49" y="95" width="22" height="3" rx="1.5" class="b-mode" opacity=".35"/>
+            <g class="arm-l"><rect x="24" y="76" width="12" height="34" rx="6" class="b-shade"/><circle cx="30" cy="112" r="6" class="b-dark"/></g>
+            <g class="arm-r"><rect x="84" y="76" width="12" height="34" rx="6" class="b-shade"/><circle cx="90" cy="112" r="6" class="b-dark"/></g>
+            <rect x="28" y="22" width="64" height="46" rx="11" class="b-body"/>
+            <rect x="24" y="36" width="6" height="16" rx="3" class="b-shade"/>
+            <rect x="90" y="36" width="6" height="16" rx="3" class="b-shade"/>
+            <g class="eyes">
+              <g class="open">
+                <circle cx="47" cy="43" r="7" class="b-dark"/><circle cx="73" cy="43" r="7" class="b-dark"/>
+                <circle cx="49" cy="41" r="2.2" fill="#fff"/><circle cx="75" cy="41" r="2.2" fill="#fff"/>
+              </g>
+              <g class="happy">
+                <path d="M40 46 Q47 36 54 46" class="b-line" stroke-width="4"/>
+                <path d="M66 46 Q73 36 80 46" class="b-line" stroke-width="4"/>
+              </g>
+              <path d="M52 56 Q60 62 68 56" class="b-line"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <svg class="desk" viewBox="0 0 140 62" aria-hidden="true">
+        <rect x="38" y="2" width="64" height="6" rx="2" class="desk-key"/>
+        <rect x="0" y="8" width="140" height="10" rx="3" class="desk-top"/>
+        <rect x="10" y="18" width="8" height="44" class="desk-top"/>
+        <rect x="122" y="18" width="8" height="44" class="desk-top"/>
+      </svg>
+    </div>
+  </section>
+
+  <div class="style-row">
+    <span>While focusing, the robot should:</span>
+    <div class="tabs" role="group" aria-label="Robot while focusing">
+      <button id="fx-pace" data-fx="pace" aria-pressed="true">Pace</button>
+      <button id="fx-type" data-fx="type" aria-pressed="false">Type</button>
+      <button id="fx-breathe" data-fx="breathe" aria-pressed="false">Breathe</button>
+      <button id="fx-still" data-fx="still" aria-pressed="false">Stay still</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn primary" id="startBtn">Start</button>
+    <button class="btn" id="resetBtn">Reset</button>
+    <button class="btn" id="skipBtn">Skip</button>
+  </div>
+
+  <details id="settings">
+    <summary>Timer settings</summary>
+    <div class="grid">
+      <label class="field">Focus (minutes)<input id="set-work" type="number" min="1" max="180" value="25"></label>
+      <label class="field">Short break (minutes)<input id="set-short" type="number" min="1" max="60" value="5"></label>
+      <label class="field">Long break (minutes)<input id="set-long" type="number" min="1" max="90" value="15"></label>
+      <label class="field">Focus rounds before a long break<input id="set-rounds" type="number" min="1" max="12" value="4"></label>
+    </div>
+    <label class="check"><input id="set-auto" type="checkbox" checked> Start the next session automatically</label>
+    <label class="check"><input id="set-sound" type="checkbox" checked> Play a chime when a session ends</label>
+  </details>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const app = $('app'), walker = $('walker');
+const LABELS = { work: 'Focus', short: 'Short break', long: 'Long break' };
+const BUBBLES = {
+  pace: ['Working… beep boop', 'Heads down, gears turning', 'Pacing helps me think'],
+  type: ['Typing away… click clack', 'Writing my best code', 'Deep in the keyboard'],
+  breathe: ['In… and out…', 'Calm circuits, clear mind', 'Steady focus'],
+  still: ['Focusing', 'Quiet mode', 'Locked in'],
+  short: ['Break time! Wheee!', 'Stretch your legs!', 'Boing! Boing!'],
+  long: ['Long break! Celebrate!', 'You earned this one!']
+};
+
+const defaults = { work: 25, short: 5, long: 15, rounds: 4, auto: true, sound: true, fx: 'pace' };
+const bubbleFor = mode => pick(BUBBLES[mode === 'work' ? cfg.fx : mode]);
+let cfg = { ...defaults };
+try { Object.assign(cfg, JSON.parse(localStorage.getItem('pacebot-cfg') || '{}')); } catch (e) {}
+
+let state = { mode: 'work', round: 1, remaining: cfg.work * 60, running: false };
+let endAt = 0, tick = null, audio = null;
+
+function saveCfg() { try { localStorage.setItem('pacebot-cfg', JSON.stringify(cfg)); } catch (e) {} }
+function total(mode) { return cfg[mode] * 60; }
+function fmt(s) { s = Math.max(0, Math.ceil(s)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
+function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+
+function setMode(mode, keepRunning) {
+  const toBreak = mode !== 'work', wasBreak = app.classList.contains('is-break');
+  if (toBreak && !wasBreak) {
+    // freeze the robot where it stands, then glide it to the middle before jumping
+    walker.style.left = getComputedStyle(walker).left;
+    app.classList.add('is-break');
+    void walker.offsetWidth;
+    walker.style.left = 'calc(50% - 60px)';
+  } else if (!toBreak) {
+    walker.style.left = '';
+    app.classList.remove('is-break');
+  }
+  state.mode = mode;
+  state.remaining = total(mode);
+  if (keepRunning) endAt = Date.now() + state.remaining * 1000;
+  $('bubble').textContent = state.running ? bubbleFor(mode) : (mode === 'work' ? "Press Start and I'll get to work" : 'Press Start to begin your break');
+  render();
+}
+
+function render() {
+  $('time').textContent = fmt(state.remaining);
+  $('label').textContent = LABELS[state.mode] + (state.running ? '' : ' · paused');
+  document.title = (state.running ? fmt(state.remaining) + ' · ' : '') + 'Pacebot';
+  $('progress').style.width = (100 * (1 - state.remaining / total(state.mode))) + '%';
+  $('startBtn').textContent = state.running ? 'Pause' : (state.remaining < total(state.mode) ? 'Resume' : 'Start');
+  app.classList.toggle('paused', !state.running);
+  for (const m of ['work', 'short', 'long']) $('tab-' + m).setAttribute('aria-pressed', String(m === state.mode));
+  $('roundText').textContent = `Round ${state.round} of ${cfg.rounds}`;
+  const dots = $('dots'); dots.innerHTML = '';
+  for (let i = 1; i <= cfg.rounds; i++) {
+    const d = document.createElement('span');
+    d.className = 'dot' + (i < state.round || (i === state.round && state.mode !== 'work') ? ' done' : i === state.round ? ' now' : '');
+    dots.appendChild(d);
+  }
+}
+
+function start() {
+  if (!audio && cfg.sound) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (audio && audio.state === 'suspended') audio.resume();
+  state.running = true;
+  endAt = Date.now() + state.remaining * 1000;
+  $('bubble').textContent = bubbleFor(state.mode);
+  clearInterval(tick); tick = setInterval(update, 250);
+  render();
+}
+function pause() {
+  state.running = false; clearInterval(tick);
+  state.remaining = Math.max(0, (endAt - Date.now()) / 1000);
+  $('bubble').textContent = 'Paused. Taking a breather.';
+  render();
+}
+function update() {
+  state.remaining = Math.max(0, (endAt - Date.now()) / 1000);
+  if (state.remaining <= 0) finish(); else render();
+}
+function next() {
+  if (state.mode === 'work') return state.round >= cfg.rounds ? 'long' : 'short';
+  if (state.mode === 'long') state.round = 1; else state.round++;
+  return 'work';
+}
+function finish() {
+  chime(state.mode === 'work');
+  const mode = next();
+  if (!cfg.auto) { state.running = false; clearInterval(tick); }
+  setMode(mode, cfg.auto);
+}
+function chime(toBreak) {
+  if (!cfg.sound || !audio) return;
+  const notes = toBreak ? [523, 659, 784, 1047] : [784, 659, 523];
+  notes.forEach((f, i) => {
+    const t = audio.currentTime + i * 0.18, o = audio.createOscillator(), g = audio.createGain();
+    o.type = 'triangle'; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.25, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    o.connect(g).connect(audio.destination); o.start(t); o.stop(t + 0.45);
+  });
+}
+
+$('startBtn').onclick = () => state.running ? pause() : start();
+$('resetBtn').onclick = () => { state.running = false; clearInterval(tick); setMode(state.mode); };
+$('skipBtn').onclick = () => { const r = state.running; setMode(next(), r); if (r) render(); };
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  state.running = false; clearInterval(tick);
+  if (b.dataset.mode === 'work' && state.mode === 'long') state.round = 1;
+  setMode(b.dataset.mode);
+});
+
+const fields = { work: 'set-work', short: 'set-short', long: 'set-long', rounds: 'set-rounds' };
+for (const [k, id] of Object.entries(fields)) {
+  $(id).value = cfg[k];
+  $(id).onchange = () => {
+    const v = Math.round(Number($(id).value));
+    if (!v || v < 1) { $(id).value = cfg[k]; return; }
+    cfg[k] = v; saveCfg();
+    if (k === 'rounds') state.round = Math.min(state.round, v);
+    else if (!state.running && k === state.mode) state.remaining = total(k);
+    render();
+  };
+}
+$('set-auto').checked = cfg.auto; $('set-auto').onchange = e => { cfg.auto = e.target.checked; saveCfg(); };
+$('set-sound').checked = cfg.sound; $('set-sound').onchange = e => { cfg.sound = e.target.checked; saveCfg(); };
+
+function applyFx() {
+  if (!['pace', 'type', 'breathe', 'still'].includes(cfg.fx)) cfg.fx = 'pace';
+  for (const f of ['pace', 'type', 'breathe', 'still']) {
+    app.classList.toggle('fx-' + f, f === cfg.fx);
+    $('fx-' + f).setAttribute('aria-pressed', String(f === cfg.fx));
+  }
+  if (state.running && state.mode === 'work') $('bubble').textContent = bubbleFor('work');
+}
+document.querySelectorAll('[data-fx]').forEach(b => b.onclick = () => { cfg.fx = b.dataset.fx; saveCfg(); applyFx(); });
+
+applyFx();
+state.remaining = total('work');
+render();
+</script>
+</body>
+</html>
