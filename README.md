@@ -4,7 +4,7 @@ A Pomodoro timer with a little robot that keeps pace with you. It works alongsid
 
 **Try it live: https://carolbult.github.io/pacebot/**
 
-![Pacebot showing a 25:00 focus timer with the robot waiting to start](docs/screenshot.png)
+![Pacebot popped out into a small floating window on top of a notes window, showing a 25:00 focus timer and the robot](docs/screenshot.png)
 
 ## Features
 
