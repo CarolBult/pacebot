@@ -13,6 +13,7 @@ A Pomodoro timer with a little robot that keeps pace with you. It works alongsid
 - A chime when each session ends
 - Settings for session lengths, the number of rounds before a long break, and whether the next session starts automatically
 - Start, pause, reset and skip controls
+- A Pop out button (Chrome and Edge) that puts Pacebot in a small window that stays on top of your other windows. You can drag it anywhere and resize it, and the layout scales to fit
 - Settings are saved in your browser, so they're still there next time
 
 ## Running it locally
